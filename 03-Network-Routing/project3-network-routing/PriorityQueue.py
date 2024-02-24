@@ -42,7 +42,6 @@ class HeapQueue:
         heapIndex = self.tracker[nodeID]
         currItem = self.items[heapIndex]
 
-        # assert(type(currItem) == self.Item)
         if newVal < currItem.val:
             self.items[heapIndex] = self.Item(currItem.id, newVal)
             self._floatUp(heapIndex)
@@ -103,9 +102,6 @@ class HeapQueue:
         itemA = self.items[index1]
         itemB = self.items[index2]
 
-        # assert(type(itemA) == self.Item)
-        # assert(type(itemB) == self.Item)
-
         self.items[index1] = itemB
         self.items[index2] = itemA
         
@@ -139,7 +135,6 @@ class ArrayQueue:
         currMinIndex = 0
         for i in range(len(self.vals)):
             if self.vals[currMinIndex] == None:
-                # assert(currMinIndex != len(self.vals) - 1)
                 currMinIndex = i + 1
                 continue
 
