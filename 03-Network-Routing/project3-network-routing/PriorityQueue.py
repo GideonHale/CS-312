@@ -1,25 +1,33 @@
 from collections import namedtuple
 
+# We shall assume that memory allocation requires O(1) time. Also all methods and
+# operations for this class require O(n) space complexity total, n being the
+# maximum number of items.
 class HeapQueue:
-    def __init__( self, finalNumNodes):
-        # initialize everybody with the proper length to maintain constant time insert
-        self.items = [None] * finalNumNodes # the actual heap, items are tuples containing an id and a value
-        self.tracker = [None] * finalNumNodes # tracks the where each item is in the heap, provides the heap index for a given id
+    def __init__( self, maxNumNodes):
+        # We'll initialize everybody with proper length to maintain constant time append.
+        # The actual heap, its items being tuples containing an id and a value.
+        self.items = [None] * maxNumNodes # O(1) time, O(n) space
+        # The location of each item in the heap, indexed by id.
+        self.tracker = [None] * maxNumNodes # O(1) time, O(n) space
+        # running size of the portion of the heap in current use
         self.size = 0
         
     Item = namedtuple('Item', ['id', 'val'])
 
-    def insert( self, identification, value ):
+    # O(logn) time, O(1) space
+    def insert( self, id, val ):
 
-        newItem = self.Item(identification, value)
+        newItem = self.Item(id, val)
 
         self.items[self.size] = newItem
         self.size += 1
         
         self.tracker[newItem.id] = self.size - 1
 
-        self._floatUp(self.size - 1)
+        self._floatUp(self.size - 1) # O(logn) time, see _floatUp() below
     
+    # O(logn) time, O(1) space
     def deleteMin( self ):
 
         firstItem = self.items[0]
@@ -33,10 +41,11 @@ class HeapQueue:
 
         self.size -= 1
 
-        self._siftDown(0)
+        self._siftDown(0) # O(logn) time, see _siftDown() below
 
         return firstItem.id
         
+    # O(logn) time, O(1) space
     def decrease( self, nodeID, newVal ):
 
         heapIndex = self.tracker[nodeID]
@@ -44,28 +53,38 @@ class HeapQueue:
 
         if newVal < currItem.val:
             self.items[heapIndex] = self.Item(currItem.id, newVal)
-            self._floatUp(heapIndex)
-            self._siftDown(heapIndex)
+            self._floatUp(heapIndex) # O(logn) time, see _floatUP() below
+            self._siftDown(heapIndex) # O(logn) time, see _siftDown() below
             return True
         
         return False
     
+    # O(logn) time, O(1) space
     def _floatUp( self, currNodePos ):
+        # This is where logn complexity is caused throughout the whole data structure.
 
-        while currNodePos > 0:
+        # the heap always has a depth of logn, so this will loop no more than logn times
+        while currNodePos > 0: # all the other stuff in here takes O(1) time
             parentPos = (currNodePos - 1) // 2
 
             if self.items[currNodePos].val < self.items[parentPos].val:
-                self._swap(parentPos, currNodePos)
+                self._swap(parentPos, currNodePos) # O(1) time, see _swap() below
                 currNodePos = parentPos
 
             else: return
     
+    # O(logn) time, O(1) space
     def _siftDown( self, currNodePos ):
+        # This was probably the most complicated function to write and thereby
+        # caused a lot of bugs. I hope you appreciate it.
+        # This is where logn complexity is caused throughout the whole data structure.
+
         # loop until
             # current node has no children or
             # current node has one child and it's bigger or
             # current node has two children and both are bigger
+        # this loops potentially from root to leaf node, which is at most logn times
+        # everything else takes O(1) time
         while True:
             currNode = self.items[currNodePos]
             lChildPos = 2 * currNodePos + 1
@@ -75,10 +94,12 @@ class HeapQueue:
 
             # if there are zero or one children:
             if rChildPos > self.size - 1: # if rChild doesn't exist:
-                if lChildPos > self.size - 1: return # if lChild doesn't exist: stop (we are done)
+                # if lChild doesn't exist: stop (we are done)
+                if lChildPos > self.size - 1: return
                 
                 if lChild.val < currNode.val: # if lChild is smaller than currNode:
-                    self._swap(currNodePos, lChildPos) # swap
+                    # O(1) time, see _swap() below
+                    self._swap(currNodePos, lChildPos) # swap;
                     return # stop (we are done)
                 
                 else: return # lChild is bigger than currNode: stop (we are done)
@@ -86,19 +107,25 @@ class HeapQueue:
             # else if both children are bigger than currNode: stop (we are done)
             elif lChild.val >= currNode.val and rChild.val >= currNode.val: return
             
-            elif lChild.val <= rChild.val: # else if lChild is less than or equal to rChild:
-                self._swap(currNodePos, lChildPos) # swap with lChild
+            # else if lChild is less than or equal to rChild:
+            elif lChild.val <= rChild.val:
+                # O(1) time, see _swap() below
+                self._swap(currNodePos, lChildPos) # swap with lChild;
                 currNodePos = lChildPos # set currNode to lChild
 
             elif rChild.val <= lChild.val: # else if rChild is less than lChild:
-                self._swap(currNodePos, rChildPos) # swap with rChild
+                # O(1) time, see _swap() below
+                self._swap(currNodePos, rChildPos) # swap with rChild;
                 currNodePos = rChildPos # set currNode to rChild
 
-            else: assert(False) # this should never happen, all cases are supposed to be covered
+            # this should never happen, all cases are supposed to be covered
+            else: assert(False)
     
-    # also rearranges self.tracker[] appropriately
+    # O(1) time, O(1) space
     def _swap( self, index1, index2 ):
+        # also rearranges self.tracker[] appropriately
 
+        # this is all O(1) time stuff, since it doesn't at all depend upon n
         itemA = self.items[index1]
         itemB = self.items[index2]
 
@@ -111,18 +138,22 @@ class HeapQueue:
         self.tracker[itemB.id] = trackA
 
 
+# We continue to assume that memory allocation requires O(1) time, and so also that all
+# operations for this class require O(n) space complexity total, n being the maximum
+# number of items.
 class ArrayQueue:
-    def __init__( self, numNodes ):
+    def __init__( self, maxNumNodes ):
         # nodes are named numerically upon insertion
-        self.totalNumNodes = numNodes
-        self.vals = [None] * self.totalNumNodes
+        self.vals = [None] * maxNumNodes
         self.size = 0
 
+    # O(1) time, O(1) space
     def insert( self, index, val ):
-        # pretty simple operation
+        # this only takes O(1) time if vals[] is already initialized to size
         self.vals[index] = val
         self.size += 1
     
+    # O(n) time, O(1) space
     def deleteMin( self ):
         # accesses _findMin(), which takes O(n) time
         minIndex = self._findMin()
@@ -130,10 +161,10 @@ class ArrayQueue:
         self.size -= 1
         return minIndex
     
+    # O(n) time, O(1) space
     def _findMin( self ):
-        # this function takes O(1) time
         currMinIndex = 0
-        for i in range(len(self.vals)):
+        for i in range(len(self.vals)): # loops n times
             if self.vals[currMinIndex] == None:
                 currMinIndex = i + 1
                 continue
@@ -144,6 +175,7 @@ class ArrayQueue:
 
         return currMinIndex
         
+    # O(1) time, O(1) space
     def decrease( self, nodeID, newVal ):
         # returns true if the value was updated, false otherwise
         if newVal < self.vals[nodeID]:

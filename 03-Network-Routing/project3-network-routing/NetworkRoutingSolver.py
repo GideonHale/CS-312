@@ -7,14 +7,14 @@ from PriorityQueue import *
 
 
 class NetworkRoutingSolver:
-    def __init__( self ):
-        pass
+    def __init__( self ): pass
 
     def initializeNetwork( self, network ):
         assert( type(network) == CS312Graph )
         self.network = network
 
     def computeShortestPaths( self, srcIndex, use_heap=False ):
+
         self.source = srcIndex
         t1 = time.time()
 
@@ -24,31 +24,37 @@ class NetworkRoutingSolver:
         return (t2-t1)
     
     def _dijkstra( self, srcIndex, heapImpl ):
-        allNodes = self.network.nodes
 
-        # heapImpl = False # fixme: remove this later
+        allNodes = self.network.nodes # O(|V|) time, O(|V|) space
 
-        if heapImpl:
+        if heapImpl: # see HeapQueue
             pQueue = HeapQueue(len(allNodes))
-        else:
+        else: # see ArrayQueue
             pQueue = ArrayQueue(len(allNodes))
         
+        # O(|V|) time, O(|V|) space
         self.distances = [float('inf') for _ in range(len(allNodes))]
         self.distances[srcIndex] = 0
         self.prevNodes = {node.node_id: None for node in self.network.getNodes()}
 
+        # time: O(|V|) * insert() time; space: O(1) * insert()
         for node in allNodes: pQueue.insert(node.node_id, self.distances[node.node_id])
-        while pQueue.size != 0:
-            currSrc = pQueue.deleteMin()
+
+        while pQueue.size != 0: # loop |V| times
+            currSrc = pQueue.deleteMin() # O(1) * deleteMin() time and space
+
+            # loops |E| times total, disregarding the outer loop
             for edge in allNodes[currSrc].neighbors:
-                assert(type(edge) == CS312GraphEdge)
                 currDest = edge.dest.node_id
                 if self.distances[currSrc] + edge.length < self.distances[currDest]:
                     self.distances[currDest] = self.distances[currSrc] + edge.length
                     self.prevNodes[currDest] = currSrc
-                    pQueue.decrease(currDest, self.distances[currDest])
+
+                    # O(1) * decrease() time and space
+                    pQueue.decrease(currDest, self.distances[currDest]) 
 
     def getShortestPath( self, destIndex ):
+
         totalLength = self.distances[destIndex]
 
         if totalLength == float('inf'): return {'cost':float('inf'), 'path':[]}
