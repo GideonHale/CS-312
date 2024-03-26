@@ -32,8 +32,8 @@ class GeneSequencing:
 
 	def align( self, seq1: str, seq2: str, banded: bool, align_length: int):
 
-		seqComp = SequenceComparer(seq1, seq2, align_length, MAXINDELS if banded else float('inf'),
-							 	   MATCH, INDEL, SUB)
+		seqComp = SequenceComparer(seq1, seq2, align_length,
+					MAXINDELS if banded else float('inf'), MATCH, INDEL, SUB)
 		
 		score = seqComp.getCost()
 		alignment1, alignment2 = seqComp.getAlignments()

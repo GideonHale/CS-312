@@ -28,21 +28,24 @@ class Entry:
         # l2 = " " if self.letter2 == "" else self.letter2
         # return f"{direction} {self.cost:02d} [{l1},{l2}]"
 
+# Unrestricted Total: O(mn) time, O(mn) space
+# Banded Total: O(kn) time, O(kn) space
 class SequenceComparer:
 
-    def __init__(self, seq1, seq2, maxAlignLength = float('inf'), maxVariation = float('inf'), MATCH = 0, INDEL = 0, SUB = 0):
-        self.seq1 = seq1
-        self.seq2 = seq2
+    # accesses _populateTable()
+    def __init__(self, seq1, seq2,
+                 maxAlignLength = float('inf'), maxVariation = float('inf'),
+                 MATCH = 0, INDEL = 5, SUB = 1):
+        self.seq1 = seq1[:maxAlignLength] # let seq1 have length m
+        self.seq2 = seq2[:maxAlignLength] # let seq2 have length n
         self.didSwitch = False
         if len(self.seq2) > len(self.seq1):
-            self.seq1 = seq2
-            self.seq2 = seq1
+            self.seq1 = seq2[:maxAlignLength]
+            self.seq2 = seq1[:maxAlignLength]
             self.didSwitch = True
-        # if len(self.seq1) < 100: print(self.seq1)
-        # if len(self.seq2) < 100: print(self.seq2)
         self.maxAlignLength = maxAlignLength
         self.maxVariation = maxVariation
-        self.bandwidth = self.maxVariation * 2 + 1
+        self.bandwidth = self.maxVariation * 2 + 1 # let bandwidth == k
         self.banded = self.bandwidth != float('inf')
 
         self.MATCH = MATCH
@@ -52,14 +55,13 @@ class SequenceComparer:
         # banded version should be 7 entries wide for this project
         tableWidth = min(len(self.seq2), self.bandwidth - 1, maxAlignLength)
         tableLength = min(len(self.seq1), maxAlignLength)
+        # For unrestricted, this table is m x n. Nothing else needs space proportional to m,n or k.
+        # For banded, this table is k x n. Nothing else needs space proportional to n or k.
+        # The overall space requirement for this comparer object is either O(mn) or O(kn), respectively.
         self.dpTable = [[None for _ in range(tableWidth + 1)] for _ in range(tableLength + 1)]
-        self._populateTable()
+        self._populateTable() # this function call takes up most of the time
     
-    def setUnitCosts(self, match, indel, sub):
-        self.MATCH = match
-        self.INDEL = indel
-        self.SUB = sub
-
+    # irrelevant
     def __str__(self):
         dpTableString = ""
         for row in self.dpTable:
@@ -68,6 +70,179 @@ class SequenceComparer:
 
         return f"SequenceComparer:\n\tseq1 - {self.seq1} ({len(self.seq1)})\n\tseq2 - {self.seq2} ({len(self.seq2)})\n\tdpTable: \n{dpTableString}"
 
+    # Unrestricted: O(mn) time | Banded: O(kn) time
+    # accesses _fillOneCell()
+    def _populateTable(self):
+        
+        for row in range(len(self.dpTable)): # will repeat n times
+            if row > self.maxAlignLength: return
+
+            # will repeat m times for unrestriced, k times for banded
+            for col in range(len(self.dpTable[row])):
+                if col > self.maxAlignLength: break
+                self._fillOneCell(row, col)
+
+    # O(1) time
+    # accesses _determineCost()
+    def _fillOneCell(self, row, col):
+        if row == 0:
+            if col == 0:
+                self.dpTable[col][row] = Entry(Entry.Location(row, col), "", "", 0)
+                return
+            else: currEntry = Entry(Entry.Location(row, col), "", self.seq2[col - 1])
+        else:
+            if col == 0: currEntry = Entry(Entry.Location(row, col), self.seq1[row - 1], "")
+            else: currEntry = Entry(Entry.Location(row, col), self.seq1[row - 1], self.seq2[col - 1])
+
+        if not self.banded: # the default option
+            if row == 0:
+                if col == 0: raise IndexError("This should already have been covered")
+                else: self._determineCost(currEntry, True, False, False)
+            else:
+                if col == 0: self._determineCost(currEntry, False, True, False)
+                else: self._determineCost(currEntry)
+
+        else: # if it's banded
+            if row == 0: # first row
+                if col == 0: raise IndexError("This should already have been covered")
+                elif col > self.maxVariation: return # end of column
+                else: self._determineCost(currEntry, True, False, False)
+
+            elif row <= self.maxVariation: # initial wedge for banded
+                if col == 0: self._determineCost(currEntry, False, True, False)
+                elif col == self.maxVariation + row: self._determineCost(currEntry, True, False, True)
+                elif col > self.maxVariation + row: return # cell doesn't exist
+                else: self._determineCost(currEntry, True, True, True)
+
+            elif row > len(self.seq2) - self.maxVariation:
+                currEntry.letter2 = self.seq2[len(self.seq2) - self.bandwidth + col]
+
+                firstViableCol = row - len(self.seq2) + self.maxVariation
+
+                if col < firstViableCol: return
+                elif col == firstViableCol: self._determineCost(currEntry, False, True, True)
+                else: self._determineCost(currEntry, True, True, True)
+
+            else: # row is greater than self.maxVariation and less than self.maxAlignLength
+                currEntry.letter2 = self.seq2[row + col - self.maxVariation - 1]
+
+                if col == 0: self._determineCost(currEntry, False, True, True, 1)
+                elif col == self.bandwidth - 1: self._determineCost(currEntry, True, False, True, 1)
+                elif col >= self.bandwidth: return # cell doesn't exist
+                else: self._determineCost(currEntry, True, True, True, 1)
+        
+        self.dpTable[row][col] = currEntry
+
+    # O(1) time 
+    # calculates cost of one cell
+    # accesses _findMin()
+    def _determineCost(self, entry: Entry,
+                       leftValid = True, upValid = True, diagValid = True,
+                       shift = 0):
+    
+        self.dpTable[entry.loc.row][entry.loc.col] = entry
+
+        if leftValid: # moving right -> seq1 gets a hyphen, seq2 gets its letter
+            insCost = self.INDEL + self.dpTable[entry.loc.row][entry.loc.col - 1].cost
+        else: insCost = float('inf')
+
+        if upValid: # moving down -> seq1 gets its letter, seq2 gets a hyphen
+            delCost = self.INDEL + self.dpTable[entry.loc.row - 1][entry.loc.col + shift].cost
+        else: delCost = float('inf')
+        
+        if diagValid:
+            matCost = self.MATCH + self.dpTable[entry.loc.row - 1][entry.loc.col - 1 + shift].cost
+            subCost = self.SUB + self.dpTable[entry.loc.row - 1][entry.loc.col - 1 + shift].cost
+        else:
+            matCost = float('inf')
+            subCost = float('inf')
+
+        if entry.letter1 == entry.letter2:
+            entry.isMatch = True
+        
+        # tie priority -> insert, delete, match / substitute
+        move = self._findMin(insCost, delCost, matCost if entry.isMatch else subCost)
+
+        match move:
+            case "left": # insert
+                entry.cost = insCost
+                entry.prev = Entry.Location(entry.loc.row, entry.loc.col - 1)
+                entry.prevDirection = "left"
+            case "up": # delete
+                entry.cost = delCost
+                entry.prev = Entry.Location(entry.loc.row - 1, entry.loc.col + shift)
+                entry.prevDirection = "up"
+            case "diag": # match / substitute
+                entry.cost = matCost if entry.isMatch else subCost
+                entry.prev = Entry.Location(entry.loc.row - 1, entry.loc.col - 1 + shift)
+                entry.prevDirection = "diag"
+
+    # O(1) time
+    # finds the cheapest option and returns "left", "up", or "diag"
+    def _findMin(self, left, up, diag):
+        if left == up == diag: return "left"
+        elif left <= up and left <= diag: return "left"
+        elif up <= diag: return "up"
+        else: return "diag"
+
+    # O(1) time
+    def getCost(self):
+        targetEntry = self.dpTable[-1][-1]
+        if targetEntry == None: return float('inf')
+        else: return targetEntry.cost
+    
+    # O(1) time
+    # accesses _reconstructPath() and _figureAlignments()
+    def getAlignments(self):
+        if self.dpTable[-1][-1] == None:
+            return "No Alignment Possible.", "No Alignment Possible."
+        
+        path = self._reconstructPath()
+        al1, al2 = self._figureAlignments(path)
+        if self.didSwitch: return al2, al1
+        else: return al1, al2
+
+    # O(m + n) time for both unrestricted and banded; O(m + n) space as well
+    def _reconstructPath(self):
+        stack = []
+
+        row = len(self.dpTable) - 1
+        col = len(self.dpTable[0]) - 1
+        # the maximum times this will loop is m + n because of Manhatten distance
+        while row != 0 and col != 0:
+            currEntry = self.dpTable[row][col]
+            stack.append(currEntry)
+            row = currEntry.prev.row
+            col = currEntry.prev.col
+        stack.append(self.dpTable[0][0])
+
+        stack.reverse()
+        return stack
+
+    # O(m + n) time for both unrestricted and banded O(m + n) space as well
+    def _figureAlignments(self, path):
+        alignment1 = ""
+        alignment2 = ""
+        count = 0
+        for entry in path: # will loop maximum m + n times because of Manhatten distance
+            if count > 100: break
+            count += 1
+
+            if entry.prev == None:
+                continue # this represents the empty string, so we're good.
+            elif entry.prevDirection == "left":
+                alignment1 += "-"
+                alignment2 += entry.letter2
+            elif entry.prevDirection == "up":
+                alignment1 += entry.letter1
+                alignment2 += "-"
+            elif entry.prevDirection == "diag":
+                alignment1 += entry.letter1
+                alignment2 += entry.letter2
+            else: return "nogood"
+        return alignment1, alignment2
+
+    # for testing purposes, not to be used by the GUI
     @staticmethod
     def commandLineAccess():
         import sys
@@ -86,7 +261,6 @@ class SequenceComparer:
             if maxVariation == "None": obj = SequenceComparer(seq1, seq2, int(maxAlignLength))
             else: obj = SequenceComparer(seq1, seq2, int(maxAlignLength), int(maxVariation))
         obj._performComLineOps(operation, params)
-    
     def _performComLineOps(self, operation, params):
         # Implement specific operations to test
         if operation == "findMin":
@@ -148,155 +322,6 @@ class SequenceComparer:
             print(self)
         else: print("Invalid operation")
 
-    def _populateTable(self):
-        
-        for row in range(len(self.dpTable)):
-            if row > self.maxAlignLength: return
-
-            for col in range(len(self.dpTable[row])): # assume bandwidth is always smaller than maxAlignLength
-                if col > self.maxAlignLength: break
-                self._fillOneCell(row, col)
-
-    def _fillOneCell(self, row, col):
-        if row == 0:
-            if col == 0:
-                self.dpTable[col][row] = Entry(Entry.Location(row, col), "", "", 0)
-                return
-            else: currEntry = Entry(Entry.Location(row, col), "", self.seq2[col - 1])
-        else:
-            if col == 0: currEntry = Entry(Entry.Location(row, col), self.seq1[row - 1], "")
-            else: currEntry = Entry(Entry.Location(row, col), self.seq1[row - 1], self.seq2[col - 1])
-
-        if not self.banded: # the default option
-            if row == 0:
-                if col == 0: raise IndexError("This should already have been covered")
-                else: self._determineCost(currEntry, True, False, False)
-            else:
-                if col == 0: self._determineCost(currEntry, False, True, False)
-                else: self._determineCost(currEntry)
-
-        else: # if it's banded
-            if row == 0: # first row
-                if col == 0: raise IndexError("This should already have been covered")
-                elif col > self.maxVariation: return # end of column
-                else: self._determineCost(currEntry, True, False, False)
-
-            elif row <= self.maxVariation: # initial wedge for banded
-                if col == 0: self._determineCost(currEntry, False, True, False)
-                elif col == self.maxVariation + row: self._determineCost(currEntry, True, False, True)
-                elif col > self.maxVariation + row: return # cell doesn't exist
-                else: self._determineCost(currEntry, True, True, True)
-
-            elif row > len(self.seq2) - self.maxVariation:
-                currEntry.letter2 = self.seq2[len(self.seq2) - self.bandwidth + col]
-
-                stop = row - len(self.seq2) + self.maxVariation
-
-                if col < stop: return
-                elif col == stop: self._determineCost(currEntry, False, True, True)
-                else: self._determineCost(currEntry, True, True, True)
-
-            else: # row is greater than self.maxVariation and less than self.maxAlignLength
-                currEntry.letter2 = self.seq2[row + col - self.maxVariation - 1]
-
-                if col == 0: self._determineCost(currEntry, False, True, True, 1)
-                elif col == self.bandwidth - 1: self._determineCost(currEntry, True, False, True, 1)
-                elif col >= self.bandwidth: return # cell doesn't exist
-                else: self._determineCost(currEntry, True, True, True, 1)
-        
-        self.dpTable[row][col] = currEntry
-
-    def _determineCost(self, entry: Entry, leftValid = True, upValid = True, diagValid = True, shift = 0): # does direction logic
-
-        self.dpTable[entry.loc.row][entry.loc.col] = entry
-
-        if leftValid: insCost = self.INDEL + self.dpTable[entry.loc.row][entry.loc.col - 1].cost # moving right -> seq1 gets a hyphen, seq2 gets its letter
-        else: insCost = float('inf')
-
-        if upValid: delCost = self.INDEL + self.dpTable[entry.loc.row - 1][entry.loc.col + shift].cost # moving down -> seq1 gets its letter, seq2 gets a hyphen
-        else: delCost = float('inf')
-        
-        if diagValid:
-            matCost = self.MATCH + self.dpTable[entry.loc.row - 1][entry.loc.col - 1 + shift].cost
-            subCost = self.SUB + self.dpTable[entry.loc.row - 1][entry.loc.col - 1 + shift].cost
-        else:
-            matCost = float('inf')
-            subCost = float('inf')
-
-        if entry.letter1 == entry.letter2:
-            entry.isMatch = True
-        
-        move = self._findMin(insCost, delCost, matCost if entry.isMatch else subCost) # tie priority -> insert, delete, match / substitute
-
-        match move:
-            case "left": # insert
-                entry.cost = insCost
-                entry.prev = Entry.Location(entry.loc.row, entry.loc.col - 1)
-                entry.prevDirection = "left"
-            case "up": # delete
-                entry.cost = delCost
-                entry.prev = Entry.Location(entry.loc.row - 1, entry.loc.col + shift)
-                entry.prevDirection = "up"
-            case "diag": # match / substitute
-                entry.cost = matCost if entry.isMatch else subCost
-                entry.prev = Entry.Location(entry.loc.row - 1, entry.loc.col - 1 + shift)
-                entry.prevDirection = "diag"
-
-    def _findMin(self, left, up, diag): # finds the cheapest option
-        if left == up == diag: return "left"
-        elif left <= up and left <= diag: return "left"
-        elif up <= diag: return "up"
-        else: return "diag"
-
-    def getCost(self):
-        targetEntry = self.dpTable[-1][-1]
-        if targetEntry == None: return float('inf')
-        else: return targetEntry.cost
-    
-    def getAlignments(self):
-        if self.dpTable[-1][-1] == None: return "No Alignment Possible.", "No Alignment Possible."
-        
-        path = self._reconstructPath()
-        al1, al2 = self._figureAlignments(path)
-        if self.didSwitch: return al2, al1
-        else: return al1, al2
-
-    def _reconstructPath(self):
-        stack = []
-
-        row = len(self.dpTable) - 1
-        col = len(self.dpTable[0]) - 1
-        while row != 0 and col != 0:
-            currEntry = self.dpTable[row][col]
-            stack.append(currEntry)
-            row = currEntry.prev.row
-            col = currEntry.prev.col
-        stack.append(self.dpTable[0][0])
-
-        stack.reverse()
-        return stack
-    
-    def _figureAlignments(self, path):
-        alignment1 = ""
-        alignment2 = ""
-        count = 0
-        for entry in path: # this is supposed to start at the beginning, [0][0]
-            count += 1
-            if count > 100: break
-
-            if entry.prev == None: continue # this represents the empty string, so we're good.
-            elif entry.prevDirection == "left":
-                alignment1 += "-"
-                alignment2 += entry.letter2
-            elif entry.prevDirection == "up":
-                alignment1 += entry.letter1
-                alignment2 += "-"
-            elif entry.prevDirection == "diag":
-                alignment1 += entry.letter1
-                alignment2 += entry.letter2
-            else: return "nogood"
-        return alignment1, alignment2
-
-# for testing purposes
+# for testing purposes, not to be used by the GUI
 if __name__ == "__main__":
     SequenceComparer.commandLineAccess()
