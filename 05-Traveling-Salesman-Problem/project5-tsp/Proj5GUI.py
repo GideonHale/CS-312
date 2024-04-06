@@ -64,7 +64,6 @@ class PointLineView( QWidget ):
 		else:
 			self.pointList[color] = point_list
 
-
 	def addEdge( self, startPt, endPt, label, edgeColor, labelColor=None, xoffset=0.0 ):
 		if not labelColor:
 			labelColor = edgeColor
@@ -99,9 +98,9 @@ class PointLineView( QWidget ):
 		h = self.height()
 		w2h_desired_ratio = (xr[1]-xr[0])/(yr[1]-yr[0])
 		if w / h < w2h_desired_ratio:
-			 scale = w / (xr[1]-xr[0])
+			scale = w / (xr[1]-xr[0])
 		else:
-			 scale = h / (yr[1]-yr[0])
+			scale = h / (yr[1]-yr[0])
 
 		tform = QTransform()
 		tform.translate(self.width()/2.0,self.height()/2.0)
@@ -229,7 +228,7 @@ class Proj5GUI( QMainWindow ):
 		cities = self._scenario.getCities()
 		self.view.clearEdges()
 		for city in cities:
-		   self.view.addLabel( QPointF(city._x, city._y), city._name, \
+			self.view.addLabel( QPointF(city._x, city._y), city._name, \
 							   labelColor=(128,128,128), xoffset=10.0 )
 
 	def generateClicked(self):

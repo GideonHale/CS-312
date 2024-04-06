@@ -12,6 +12,9 @@ class TSPSolution:
 	def __init__( self, listOfCities):
 		self.route = listOfCities
 		self.cost = self._costOfRoute()
+	
+	def __lt__(self, other):
+		return self.cost < other.cost
 
 	def _costOfRoute( self ):
 		cost = 0
@@ -36,6 +39,7 @@ class TSPSolution:
 			return None
 		elist.append( (self.route[-1], self.route[0], int(math.ceil(dist))) )
 		return elist
+
 
 
 def nameForInt( num ):
@@ -86,7 +90,6 @@ class Scenario:
 	def getCities( self ):
 		return self._cities
 
-
 	def randperm( self, n ):		
 		perm = np.arange(n)
 		for i in range(n):
@@ -121,7 +124,6 @@ class Scenario:
 			if self._edge_exists[src,dst] and can_delete[src,dst]:
 				self._edge_exists[src,dst] = False
 				num_to_remove -= 1
-
 
 
 
